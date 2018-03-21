@@ -1,5 +1,5 @@
 /*
- * unwmpfs - Extracts files from ATEN PDU firmware archives.
+ * unmpfs - Extracts files from ATEN PDU firmware archives.
  *
  * Copyright 2018 Andreas Oberritter
  *
