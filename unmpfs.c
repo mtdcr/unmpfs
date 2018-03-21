@@ -214,23 +214,54 @@ static void process_mpfs(const unsigned char *mem, size_t size)
 
 static void process_mem(unsigned char *mem, size_t size)
 {
-	unsigned int offsets[] = { 0, 64 };
-	unsigned int i;
+	char filename[FILENAME_MAX];
+	const char *ext;
+	size_t i = 0;
+	char version[16 + 1];
+	char product[16 + 1];
 
-	for (i = 0; i < ARRAY_SIZE(offsets); i++) {
-		if (offsets[i] + 8 >= size) {
-			fprintf(stderr, "Cannot read MPFS header!\n");
-			return;
-		}
+	version[16] = '\0';
+	product[16] = '\0';
 
-		if (!memcmp(&mem[offsets[i]], "MPFS", 4)) {
-			process_mpfs(&mem[offsets[i]], size - offsets[i]);
-			return;
-		}
+	if (size >= 8 && !memcmp(mem, "MPFS", 4)) {
+		process_mpfs(mem, size);
+		return;
 	}
 
-	fprintf(stderr, "Invalid MPFS header\n");
-	return;
+	while (i + 64 <= size) {
+		if (le32tohp(&mem[i]) != 0xAAAAAAAA) {
+			fprintf(stderr, "Invalid magic!\n");
+			break;
+		}
+
+		uint32_t id = le32tohp(&mem[i + 4]);
+		uint32_t len = le32tohp(&mem[i + 8]);
+		uint32_t next = le32tohp(&mem[i + 12]);
+		memcpy(version, &mem[i + 16], 16);
+		memcpy(product, &mem[i + 32], 16);
+		i += 64;
+
+		assert(i + len <= size);
+
+		if (len >= 4 && !memcmp(&mem[i], "MPFS", 4))
+			ext = "mpfs";
+		else
+			ext = "bin";
+
+		snprintf(filename, sizeof(filename) - 1, "%s-%s-%#x.%s", basename(product), basename(version), id, ext);
+		filename[sizeof(filename) - 1] = '\0';
+		fprintf(stderr, "Writing %s\n", filename);
+		save_buf(filename, &mem[i], len, 0644, time(NULL));
+		i += len;
+
+		if (next == 0xFFFFFFFF) {
+			printf("Processed %zu of %zu bytes.\n", i, size);
+			break;
+		}
+
+		assert(next >= i);
+		i = next;
+	}
 }
 
 static bool process_file(int fd)
